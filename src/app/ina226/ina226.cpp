@@ -43,17 +43,21 @@ static bool i2cWrite16(uint8_t addr, uint8_t reg, uint16_t val) {
     Wire.write(reg);
     Wire.write((uint8_t)(val >> 8));
     Wire.write((uint8_t)(val & 0xFF));
+
     return Wire.endTransmission() == 0;
 }
 
 static bool i2cRead16(uint8_t addr, uint8_t reg, uint16_t& out) {
     Wire.beginTransmission(addr);
     Wire.write(reg);
+
     if (Wire.endTransmission(false) != 0) return false;  // repeated start
     if (Wire.requestFrom((int)addr, 2) != 2) return false;
+
     uint8_t msb = Wire.read();
     uint8_t lsb = Wire.read();
     out = ((uint16_t)msb << 8) | lsb;
+
     return true;
 }
 
@@ -94,9 +98,10 @@ static bool ina226_read_once(INA226Reading& r) {
     uint16_t tmp;
     if (!i2cRead16(INA226_ADDR, 0x03, tmp)) return false;
     int16_t rawPower = (int16_t)tmp;
-    r.power_mW = (float)rawPower * (25.0f * INA226_CURRENT_LSB) * 1000.0f;
 
+    r.power_mW = (float)rawPower * (25.0f * INA226_CURRENT_LSB) * 1000.0f;
     r.ts_ms = millis();
+
     return true;
 }
 
@@ -119,6 +124,7 @@ static void ina226_sensor_task(void* arg) {
 
                 g_mAh_net += d_mAh;
                 g_mWh_net += d_mWh;
+
                 if (r.current_mA >= 0.0f) {
                     g_mAh_discharge += d_mAh;  // discharge
                 } else {
@@ -167,6 +173,7 @@ bool start_task(String* error_out) {
 
     if (rc != pdPASS || s_ina226SensorTask == nullptr) {
         g_ina226_task_ready = false;
+
         if (error_out) *error_out = "xTaskCreatePinnedToCore(ina226_sensor_task)";
         return false;
     }
@@ -182,6 +189,7 @@ void shutdown() {
         cfg &= ~0x7;                          // MODE bits a 000
         i2cWrite16(INA226_ADDR, 0x00, cfg);
     }
+
     g_ina226_inited = false;  // force re-init after wake
 }
 
@@ -192,6 +200,7 @@ bool latest_power(float* vbus_V, float* current_mA) {
     *vbus_V = g_last.vbus_V;
     *current_mA = g_last.current_mA;
     portEXIT_CRITICAL(&g_last_mux);
+
     return true;
 }
 

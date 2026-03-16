@@ -21,6 +21,7 @@ const char* ps_to_str(wifi_ps_type_t t) {
 void print_wifi_sleep_status() {
     wifi_ps_type_t t;
     esp_err_t err = esp_wifi_get_ps(&t);
+
     if (err == ESP_OK) {
         Serial.printf("[WiFi] power save mode: %s  (active=%s)\n",
                       ps_to_str(t), (t != WIFI_PS_NONE ? "true" : "false"));
@@ -51,6 +52,7 @@ void handle_sleep_status(WebServer& web_server) {
     bool ok = (esp_wifi_get_ps(&t) == ESP_OK);
     String mode = ok ? ps_to_str(t) : "unknown";
     bool active = ok ? (t != WIFI_PS_NONE) : false;
+
     String json = String("{\"ok\":") + (ok ? "true" : "false") + ",\"active\":" + (active ? "true" : "false") + ",\"mode\":\"" + mode + "\"}";
     web_server.send(200, "application/json", json);
 }

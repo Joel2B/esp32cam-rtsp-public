@@ -59,22 +59,27 @@ static constexpr gpio_num_t RCWL_DO_GPIO = GPIO_NUM_2;
 static constexpr uint32_t GRACE_MS = 5000;
 static constexpr uint32_t GRACE1_MS = 5000;
 static constexpr uint32_t GRACE2_MS = 30000;
+
 enum class GraceReason : uint8_t {
     NONE,
     INIT,
     ACTIVE,
-    CANCEL,
+    g,
     STOP,
     DEBUG
 };
+
 static bool autoSleepEnabled = true;
 static bool graceActive = false;
+
 static GraceReason graceReason = GraceReason::NONE;
 static uint32_t graceStartMs = 0;
 static bool grace1Active = false;
+
 static GraceReason grace1Status = GraceReason::NONE;
 static uint32_t grace1Ms = 0;
 static bool grace2Active = false;
+
 static GraceReason grace2Status = GraceReason::NONE;
 static uint32_t grace2Ms = 0;
 static bool g_eco = false;
@@ -101,8 +106,10 @@ static bool telegram_power_provider(telegram_runtime::PowerTelemetry* out) {
     float vbus_V = 0.0f;
     float current_mA = 0.0f;
     bool ok = ina226_runtime::latest_power(&vbus_V, &current_mA);
+
     out->vbus_V = vbus_V;
     out->current_mA = current_mA;
+
     return ok;
 }
 
@@ -259,6 +266,7 @@ void handle_root() {
     auto ipv6 = WiFi.getMode() == WIFI_MODE_AP ? WiFi.softAPIPv6() : WiFi.localIPv6();
 
     auto initResult = esp_err_to_name(camera_init_result);
+
     if (initResult == nullptr)
         initResult = "Unknown reason";
 
@@ -367,6 +375,7 @@ static inline void sb_addref(SharedBuf* sb) {
     sb->ref++;
     portEXIT_CRITICAL(&g_sb_mux);
 }
+
 // Release one ref; when it reaches 0, free(buffer) and free(struct)
 static inline void sb_release(SharedBuf* sb) {
     bool doFree = false;
@@ -389,7 +398,6 @@ struct TgUploadArgs {
 
 void TgUploadTask(void* pv) {
     auto* args = static_cast<TgUploadArgs*>(pv);  // use pv
-
     bool ok = telegram_runtime::sendPhotoBuffer(args->sb->data, args->sb->len,
                                                 args->filename, args->caption);
     Serial.println(ok ? "[TG] upload OK" : "[TG] upload FAIL");
@@ -425,21 +433,26 @@ void handle_snapshot() {
 
     if (!buf) {
         if (g_cam_mutex) xSemaphoreTake(g_cam_mutex, portMAX_DELAY);
+
         cam.run();  // single run only
         const uint8_t* fb = (const uint8_t*)cam.getfb();
         size_t fb_len = cam.getSize();
+
         if (g_cam_mutex) xSemaphoreGive(g_cam_mutex);
 
         if (!fb || fb_len == 0) {
             web_server.send(500, "text/plain", "Unable to obtain frame buffer from the camera");
             return;
         }
+
         flen = fb_len;
         buf = (uint8_t*)heap_caps_malloc(flen, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+
         if (!buf) {
             web_server.send(500, "text/plain", "No memory for snapshot copy");
             return;
         }
+
         memcpy(buf, fb, flen);
     }
 
@@ -521,6 +534,7 @@ static bool ensure_frame_capacity(size_t need) {
     size_t new_cap = round_up_block(need);
 
     uint8_t* n = (uint8_t*)heap_caps_malloc(new_cap, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+
     if (!n) return false;
 
     // Keep allocator work out of the hot lock path: only pointer swap is locked.
@@ -529,6 +543,7 @@ static bool ensure_frame_capacity(size_t need) {
         g_frame = n;
         g_frame_cap = new_cap;
         if (old) free(old);
+
         return true;
     }
 
@@ -551,6 +566,7 @@ static bool ensure_frame_capacity(size_t need) {
     xSemaphoreGive(g_frame_mutex);
 
     if (old) free(old);
+
     return true;
 }
 
@@ -575,6 +591,7 @@ static void capture_task(void* pv) {
             // Ensure capacity OUTSIDE g_frame_mutex
             // to avoid malloc/free while streamer waits for frame
             bool cap_ok = ensure_frame_capacity(flen);
+
             if (cap_ok) {
                 // now lock only to copy and update metadata
                 if (xSemaphoreTake(g_frame_mutex, portMAX_DELAY) == pdTRUE) {
@@ -595,15 +612,18 @@ static void capture_task(void* pv) {
 
             // optional pacing by target FPS
             float target;
+
             if (g_http_fps_mutex) xSemaphoreTake(g_http_fps_mutex, portMAX_DELAY);
             target = g_http_fps_target;
             if (g_http_fps_mutex) xSemaphoreGive(g_http_fps_mutex);
 
             if (target > 0.0f) {
                 const float frame_us = 1000000.0f / target;
+
                 if ((float)dt < frame_us) {
                     const uint32_t wait_ms =
                         (uint32_t)((frame_us - (float)dt) / 1000.0f);
+
                     if (wait_ms > 0) {
                         vTaskDelay(pdMS_TO_TICKS(wait_ms));
                     }
@@ -612,17 +632,20 @@ static void capture_task(void* pv) {
 
             // FPS accounting (window ~1s)
             win_frames++;
+
             if (now - win_start >= 1000000) {
                 const float fps_window =
                     (float)win_frames * 1000000.0f / (float)(now - win_start);
                 win_start = now;
 
                 if (g_http_fps_mutex) xSemaphoreTake(g_http_fps_mutex, portMAX_DELAY);
+
                 g_prod_frame_count += win_frames;
                 g_prod_last_ts_us = now;
                 g_prod_fps_ema = (g_prod_fps_ema == 0.0f)
                                      ? fps_window
                                      : (0.6f * g_prod_fps_ema + 0.4f * fps_window);
+
                 if (g_http_fps_mutex) xSemaphoreGive(g_http_fps_mutex);
 
                 win_frames = 0;
@@ -632,6 +655,7 @@ static void capture_task(void* pv) {
         // fallback when no target: honor frame_duration (>0)
         if (g_http_fps_target <= 0.0f) {
             uint32_t ms = param_frame_duration.value();
+
             if (ms > 0) {
                 vTaskDelay(pdMS_TO_TICKS(ms));
             }
@@ -640,6 +664,7 @@ static void capture_task(void* pv) {
 
     g_capture_should_run = false;
     capture_task_store(nullptr);
+
     if (g_capture_exit_sem) {
         xSemaphoreGive(g_capture_exit_sem);
     }
@@ -656,11 +681,13 @@ static bool start_capture_task_if_needed() {
             if (capture_task_load() != nullptr) return true;
             vTaskDelay(pdMS_TO_TICKS(1));
         }
+
         return capture_task_load() != nullptr;
     }
 
     bool ok = true;
     TaskHandle_t current = capture_task_load();
+
     if (!current) {
         if (g_capture_exit_sem) {
             (void)xSemaphoreTake(g_capture_exit_sem, 0);  // drain stale exit signal from previous runs
@@ -668,8 +695,10 @@ static bool start_capture_task_if_needed() {
 
         g_capture_should_run = true;
         TaskHandle_t created = nullptr;
+
         BaseType_t rc = xTaskCreatePinnedToCore(
             capture_task, "capture", 8192, nullptr, 4, &created, 1);
+
         if (rc == pdPASS && created != nullptr) {
             capture_task_store(created);
         } else {
@@ -684,9 +713,11 @@ static bool start_capture_task_if_needed() {
 
 static void stop_capture_task() {
     TaskHandle_t h = capture_task_load();
+
     if (!h) return;
 
     g_capture_should_run = false;
+
     if (g_capture_exit_sem) {
         (void)xSemaphoreTake(g_capture_exit_sem, pdMS_TO_TICKS(500));
     } else {
@@ -698,6 +729,7 @@ void handle_http_fps() {
     // Change FPS if ?set=... is provided
     if (web_server.hasArg("set")) {
         float v = web_server.arg("set").toFloat();
+
         if (v < 0.0f) v = 0.0f;      // 0 = unlimited
         if (v > 120.0f) v = 120.0f;  // reasonable cap
         if (g_http_fps_mutex) xSemaphoreTake(g_http_fps_mutex, portMAX_DELAY);
@@ -710,6 +742,7 @@ void handle_http_fps() {
     uint64_t last_us;
     float ema;
     float target;
+
     if (g_http_fps_mutex) xSemaphoreTake(g_http_fps_mutex, portMAX_DELAY);
     frames = g_prod_frame_count;
     last_us = g_prod_last_ts_us;
@@ -742,6 +775,7 @@ static inline void tiny_pause() {
 
 static void http_stream_task(void* pv) {
     WiFiClient* client = reinterpret_cast<WiFiClient*>(pv);
+
     if (!client) {
         xSemaphoreGive(g_http_stream_sem);
         vTaskDelete(nullptr);
@@ -780,6 +814,7 @@ static void http_stream_task(void* pv) {
         // 1) quick snapshot
         uint32_t seq_snapshot = 0;
         size_t flen_snapshot = 0;
+
         if (xSemaphoreTake(g_frame_mutex, pdMS_TO_TICKS(1)) == pdTRUE) {
             seq_snapshot = g_frame_seq;
             flen_snapshot = g_frame_len;
@@ -814,9 +849,11 @@ static void http_stream_task(void* pv) {
 
         // 3) copy latest frame into local buffer
         size_t flen_final = 0;
+
         if (xSemaphoreTake(g_frame_mutex, pdMS_TO_TICKS(5)) == pdTRUE) {
             if (g_frame && g_frame_len > 0) {
                 flen_final = g_frame_len;
+
                 if (flen_final <= tx_cap) {
                     memcpy(tx, g_frame, flen_final);
                     last_seq = g_frame_seq;
@@ -865,8 +902,10 @@ static void http_stream_task(void* pv) {
     }
 
     if (tx) free(tx);
+
     client->stop();
     delete client;
+
     xSemaphoreGive(g_http_stream_sem);
 
     if (http_clients_dec() <= 0) {
@@ -974,6 +1013,7 @@ esp_err_t initialize_camera() {
     log_i("JPEG quality: %d", param_jpg_quality.value());
     auto jpeg_quality = param_jpg_quality.value();
     log_i("Frame duration: %d ms", param_frame_duration.value());
+
     const camera_config_t camera_config = {
         .pin_pwdn = CAMERA_CONFIG_PIN_PWDN,          // GPIO pin for camera power down line
         .pin_reset = CAMERA_CONFIG_PIN_RESET,        // GPIO pin for camera reset line
@@ -1013,6 +1053,7 @@ static void stop_rtsp_and_camera() {
     if (camera_server) {
         camera_server.reset();
     }
+
     esp_camera_deinit();  // power down camera (sensor + DCMI)
     camera_init_result = ESP_FAIL;
 }
@@ -1250,9 +1291,11 @@ static void set_light_state(bool present) {
 
 bool is_light_present_now() {
     bool val;
+
     if (g_light_mutex) xSemaphoreTake(g_light_mutex, portMAX_DELAY);
     val = g_light_present;
     if (g_light_mutex) xSemaphoreGive(g_light_mutex);
+
     return val;
 }
 
@@ -1864,6 +1907,7 @@ void handle_frame_dark() {
 
     // frame age in ms (in case frames are no longer produced)
     uint64_t last_us = 0;
+
     if (g_http_fps_mutex) xSemaphoreTake(g_http_fps_mutex, portMAX_DELAY);
     last_us = g_prod_last_ts_us;
     if (g_http_fps_mutex) xSemaphoreGive(g_http_fps_mutex);
@@ -1959,8 +2003,8 @@ void setup() {
     iotWebConf.setStatusPin(USER_LED_GPIO, USER_LED_ON_LEVEL);
 #endif
     iotWebConf.init();
-
     iotWebConf.skipApStartup();
+
     strcpy(iotWebConf.getApPasswordParameter()->valueBuffer, AP_ADMIN_PASSWORD);
     strcpy(iotWebConf.getWifiParameterGroup()->_wifiSsid, WIFI_SSID);
     strcpy(iotWebConf.getWifiParameterGroup()->_wifiPassword, WIFI_PASSWORD);
@@ -1983,9 +2027,11 @@ void setup() {
     btStop();
 
     Wire.begin(I2C_WIRE_SDA, I2C_WIRE_SCL);
+
     telegram_runtime::Config telegram_cfg{};
     telegram_cfg.power_provider = telegram_power_provider;
     telegram_runtime::configure(telegram_cfg);
+
     power_runtime::Config power_cfg{};
     power_cfg.get_cpu_mhz = power_get_cpu_mhz;
     power_cfg.set_cpu_mhz = power_set_cpu_mhz;

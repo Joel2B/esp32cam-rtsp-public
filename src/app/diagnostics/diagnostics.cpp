@@ -41,6 +41,7 @@ static MemStats get_mem_stats() {
     m.total_psram = heap_caps_get_total_size(MALLOC_CAP_SPIRAM);
     m.free_psram = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
     m.largest_psram = heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM);
+
     return m;
 }
 
@@ -49,6 +50,7 @@ static bool idle_hook_core0() {
     uint64_t last = g_idle_last_ts_us[0];
     if (last != 0) g_idle_us[0] += (now - last);
     g_idle_last_ts_us[0] = now;
+
     return true;
 }
 
@@ -56,8 +58,10 @@ static bool idle_hook_core0() {
 static bool idle_hook_core1() {
     uint64_t now = esp_timer_get_time();
     uint64_t last = g_idle_last_ts_us[1];
+
     if (last != 0) g_idle_us[1] += (now - last);
     g_idle_last_ts_us[1] = now;
+
     return true;
 }
 #endif
@@ -80,6 +84,7 @@ static CpuStats sample_cpu_load(uint32_t interval_us) {
 
     uint64_t real_dt = (t1 - t0);
     CpuStats s{};
+
     float idle_frac0 = real_dt ? (float)(idle0_b - idle0_a) / (float)real_dt : 0.0f;
     s.core_load[0] = 100.0f * (1.0f - idle_frac0);
 #if portNUM_PROCESSORS > 1
@@ -104,6 +109,7 @@ void init_cpu_idle_hooks() {
 
 void handle_rtsp_stats(WebServer& web_server) {
     const bool running = (g_cfg.rtsp_running != nullptr) ? g_cfg.rtsp_running() : false;
+
     if (!running) {
         web_server.send(503, "application/json", "{\"error\":\"rtsp not running\"}");
         return;
@@ -112,6 +118,7 @@ void handle_rtsp_stats(WebServer& web_server) {
     float fps = (g_cfg.rtsp_fps != nullptr) ? g_cfg.rtsp_fps() : 0.0f;
     size_t sessions = (g_cfg.rtsp_sessions != nullptr) ? g_cfg.rtsp_sessions() : 0;
     String json = String("{\"fps\":") + String(fps, 2) + ",\"sessions\":" + String(sessions) + "}";
+
     web_server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
     web_server.send(200, "application/json", json);
 }

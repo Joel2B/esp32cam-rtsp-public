@@ -51,6 +51,7 @@ void handle_profile(WebServer& web_server) {
 
             after_mhz = g_cfg.get_cpu_mhz();
             applied = (after_mhz == mhz);
+
             if (!applied) cpu_err = "apply_failed";
         } else {
             cpu_err = "unsupported_mhz";
@@ -72,6 +73,7 @@ void handle_profile(WebServer& web_server) {
         json += "\"camera\":\"off\",";
         json += "\"cpu\":{\"requested\":" + String(req_mhz) + ",\"before\":" + String(before_mhz) + ",\"after\":" + String(after_mhz) + ",\"applied\":" + String(applied ? "true" : "false") + (cpu_err.length() ? ",\"error\":\"" + cpu_err + "\"" : "") + "}";
         json += "}";
+
         web_server.send(200, "application/json", json);
         return;
     }
@@ -82,7 +84,6 @@ void handle_profile(WebServer& web_server) {
 
         g_cfg.power_on_camera();
         g_cfg.set_wifi_ps("none");
-
         *g_cfg.eco_mode = false;
 
         bool cam_on = g_cfg.is_camera_on();
@@ -92,16 +93,19 @@ void handle_profile(WebServer& web_server) {
         json += "\"camera\":\"" + String(cam_on ? "on" : "off") + "\",";
         json += "\"cpu\":{\"requested\":" + String(req_mhz) + ",\"before\":" + String(before_mhz) + ",\"after\":" + String(after_mhz) + ",\"applied\":" + String(applied ? "true" : "false") + (cpu_err.length() ? ",\"error\":\"" + cpu_err + "\"" : "") + "}";
         json += "}";
+
         web_server.send(200, "application/json", json);
         return;
     }
 
     if (req_mhz > 0) {
         apply_cpu(req_mhz);
+
         String json = "{";
         json += "\"ok\":" + String(applied ? "true" : "false") + ",";
         json += "\"cpu\":{\"requested\":" + String(req_mhz) + ",\"before\":" + String(before_mhz) + ",\"after\":" + String(after_mhz) + ",\"applied\":" + String(applied ? "true" : "false") + (cpu_err.length() ? ",\"error\":\"" + cpu_err + "\"" : "") + "}";
         json += "}";
+
         web_server.send(200, "application/json", json);
         return;
     }
@@ -111,6 +115,7 @@ void handle_profile(WebServer& web_server) {
         json += "\"ok\":" + String(applied ? "true" : "false") + ",";
         json += "\"cpu\":{\"requested\":" + String(req_mhz) + ",\"before\":" + String(before_mhz) + ",\"after\":" + String(after_mhz) + ",\"applied\":" + String(applied ? "true" : "false") + (cpu_err.length() ? ",\"error\":\"" + cpu_err + "\"" : "") + "}";
         json += "}";
+
         web_server.send(200, "application/json", json);
         return;
     }

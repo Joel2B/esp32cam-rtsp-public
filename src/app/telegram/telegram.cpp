@@ -1,9 +1,10 @@
 #include "telegram.h"
-#include "config/secrets.h"
 
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
 #include <ctype.h>
+
+#include "config/secrets.h"
 
 namespace telegram_runtime {
 namespace {
@@ -16,12 +17,14 @@ Config g_cfg = {
 
 static String getDateTimeString() {
     struct tm timeinfo;
+
     if (!getLocalTime(&timeinfo)) {
         return "NO_TIME";
     }
 
     char buffer[32];
     strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", &timeinfo);
+
     return String(buffer);
 }
 
@@ -29,8 +32,10 @@ static String urlEncode(const String& s) {
     String out;
     out.reserve(s.length() * 1.2);
     const char* hex = "0123456789ABCDEF";
+
     for (size_t i = 0; i < s.length(); ++i) {
         char c = s[i];
+
         if (isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~') {
             out += c;
         } else if (c == ' ') {
@@ -55,6 +60,7 @@ void configure(const Config& cfg) {
 
 String send(const String& text, const String& parse_mode) {
     PowerTelemetry m{};
+
     if (g_cfg.power_provider) {
         (void)g_cfg.power_provider(&m);
     }
@@ -65,24 +71,29 @@ String send(const String& text, const String& parse_mode) {
 
     String endpoint = "https://api.telegram.org/bot" + String(g_cfg.message_bot_token) + "/sendMessage";
     String url = endpoint + "?chat_id=" + String(g_cfg.message_chat_id) + "&text=" + encodedText;
+
     if (parse_mode.length() > 0) {
         url += "&parse_mode=" + parse_mode;
     }
 
     WiFiClientSecure client;
     HTTPClient https;
+
     client.setInsecure();
     https.setConnectTimeout(2000);
     https.setTimeout(4000);
 
     String response = "";
+
     if (!https.begin(client, url)) {
         response = "[TG] begin() failed";
     }
 
     int code = https.GET();
+
     if (code > 0) {
         response = String(code);
+
         if (code == HTTP_CODE_OK) {
             String payload = https.getString();
             response = payload.c_str();
@@ -106,6 +117,7 @@ bool sendPhotoBuffer(const uint8_t* data, size_t len, const String& filename, co
 
     const char* host = "api.telegram.org";
     const uint16_t port = 443;
+
     if (!client.connect(host, port)) {
         Serial.println("[TG] Could not connect to Telegram");
         return false;
@@ -121,6 +133,7 @@ bool sendPhotoBuffer(const uint8_t* data, size_t len, const String& filename, co
         String(g_cfg.photo_chat_id) + "\r\n";
 
     String partCaption = "";
+
     if (caption.length()) {
         partCaption =
             "--" + boundary +
@@ -157,29 +170,34 @@ bool sendPhotoBuffer(const uint8_t* data, size_t len, const String& filename, co
 
     const uint8_t* p = data;
     size_t left = len;
+
     while (left > 0) {
         size_t chunk = left > 4096 ? 4096 : left;
         size_t w = client.write(p, chunk);
+
         if (w == 0) {
             Serial.println("[TG] write() returned 0");
             break;
         }
+
         p += w;
         left -= w;
     }
 
     client.print(partEnd);
     client.setTimeout(4000);
+
     String status = client.readStringUntil('\n');
     Serial.printf("[TG] status: %s", status.c_str());
 
     String resp;
+
     while (client.connected() || client.available()) {
         String line = client.readStringUntil('\n');
         resp += line + "\n";
     }
-    Serial.println(resp);
 
+    Serial.println(resp);
     return status.indexOf("200") >= 0;
 }
 }  // namespace telegram_runtime
