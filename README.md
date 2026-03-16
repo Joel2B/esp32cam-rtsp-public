@@ -6,6 +6,13 @@ This repository is based on:
 
 This fork keeps the original RTSP/MJPEG camera server foundation and adds runtime modules for OTA, diagnostics, telemetry, power management, and sleep automation.
 
+> Personal project note  
+> This repository is maintained as a personal project and is intended to be used only with this hardware stack:
+> - ESP32-S3
+> - OV5640 camera
+> - INA226 power monitor
+> - RCWL-0516 motion sensor
+
 ## What this fork does
 
 Core camera features:
@@ -66,8 +73,12 @@ Create `src/config/secrets.local.h` with at least:
 #define WIFI_PASSWORD "your-password"
 #define AP_ADMIN_PASSWORD "your-admin-password"
 #define OTA_PASSWORD "your-ota-password"
+#define TELEGRAM_MESSAGE_BOT_TOKEN "your-telegram-message-bot-token"
+#define TELEGRAM_MESSAGE_CHAT_ID "your-telegram-message-chat-id"
 // optional:
 // #define OTA_PORT 3232
+// #define TELEGRAM_PHOTO_BOT_TOKEN "your-telegram-photo-bot-token"
+// #define TELEGRAM_PHOTO_CHAT_ID "your-telegram-photo-chat-id"
 ```
 
 `platformio.local.ini` is used for local OTA upload values and is ignored by git.
@@ -111,29 +122,20 @@ Monitor:
 platformio device monitor
 ```
 
-## Supported board environments
+## Target hardware
 
-Defined in `platformio.ini` / `boards/`:
+This public project is scoped to:
 
-- `esp32cam_ai_thinker`
-- `esp32cam_espressif_esp_eye`
-- `esp32cam_espressif_esp32s2_cam_board`
-- `esp32cam_espressif_esp32s2_cam_header`
-- `esp32cam_espressif_esp32s3_cam_lcd`
-- `esp32cam_espressif_esp32s3_eye`
-- `esp32cam_freenove_wrover_kit`
-- `esp32cam_m5stack_camera_psram`
-- `esp32cam_m5stack_camera`
-- `esp32cam_m5stack_esp32cam`
-- `esp32cam_m5stack_unitcam`
-- `esp32cam_m5stack_unitcams3`
-- `esp32cam_m5stack_wide`
-- `esp32cam_m5stack_m5poecam_w`
-- `esp32cam_seeed_xiao_esp32s3_sense_usb`
-- `esp32cam_seeed_xiao_esp32s3_sense_ota`
-- `esp32cam_ttgo_t_camera`
-- `esp32cam_ttgo_t_journal`
-- `m5stack-timer-cam`
+- ESP32-S3
+- OV5640 camera
+- INA226 power monitor
+- RCWL-0516 motion sensor
+
+Default runtime pin mapping used by the firmware:
+
+- `LIGHT_DO_GPIO = GPIO_NUM_1`
+- `RCWL_DO_GPIO = GPIO_NUM_2`
+- `I2C_WIRE_SDA` / `I2C_WIRE_SCL` from board definition (with fallback `5/6` in code)
 
 ## HTTP API (current firmware)
 
@@ -141,7 +143,7 @@ Defined in `platformio.ini` / `boards/`:
 |---|---|---|
 | `/` | Main status/config page | HTML UI |
 | `/config` | IotWebConf config page | UI handler |
-| `/snapshot` | Single JPEG snapshot | Can trigger Telegram photo upload in flow |
+| `/snapshot` | Single JPEG snapshot | Optional `?send=1` (Telegram upload), `?refresh=<sec>` |
 | `/stream` | MJPEG stream | HTTP multipart stream |
 | `/camera/config` | Camera + stream JSON status | Includes init result and image controls |
 | `/rtsp/stats` | RTSP metrics | fps + sessions |
@@ -161,11 +163,45 @@ Defined in `platformio.ini` / `boards/`:
 | `/restart` | Reboot board | Immediate restart |
 | `/flash` | Flash LED control | only if `FLASH_LED_GPIO` defined (`?v=<0..255>`) |
 
+## Useful endpoint examples
+
+```bash
+# Snapshot
+curl "http://<ip>/snapshot"
+
+# Snapshot + Telegram upload
+curl "http://<ip>/snapshot?send=1"
+
+# Stream
+open "http://<ip>/stream"
+
+# Limit HTTP producer FPS to 10
+curl "http://<ip>/http/fps?set=10"
+
+# Sleep by timer (seconds)
+curl "http://<ip>/sleep?sec=60"
+
+# Enter deep sleep (wake by RCWL ext1 path)
+curl "http://<ip>/sleep?deep=1"
+
+# Power profile
+curl "http://<ip>/power/profile?mode=eco"
+curl "http://<ip>/power/profile?mode=normal"
+curl "http://<ip>/power/profile?mhz=160"
+```
+
 ## Notes
 
 - OTA auth in PlatformIO upload config should match the firmware OTA password.
 - `src/config/secrets.local.h` and `platformio.local.ini` are intentionally git-ignored.
 - Current default environment in `platformio.ini` is `esp32cam_seeed_xiao_esp32s3_sense_ota`.
+- `/sleep?deep=1` uses RCWL wake path (EXT1). `/sleep?sec=<n>` uses timer wake.
+
+## Security
+
+- This project is intended for trusted/private networks.
+- Control endpoints such as `/restart`, `/sleep`, `/power/profile`, and `/flash` can affect device availability and behavior.
+- Never commit `src/config/secrets.local.h` or `platformio.local.ini` to git.
 
 ## Credits
 
