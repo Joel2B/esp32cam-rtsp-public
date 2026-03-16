@@ -63,10 +63,7 @@ static constexpr uint32_t GRACE2_MS = 30000;
 enum class GraceReason : uint8_t {
     NONE,
     INIT,
-    ACTIVE,
-    g,
-    STOP,
-    DEBUG
+    CANCEL,
 };
 
 static bool autoSleepEnabled = true;
