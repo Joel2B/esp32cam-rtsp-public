@@ -1063,6 +1063,24 @@ void isolate(gpio_num_t gpio_num) {
     rtc_gpio_isolate(gpio_num);
 }
 
+static void configure_sleep_low_power() {
+    isolate(GPIO_NUM_1);
+    isolate(GPIO_NUM_3);
+    isolate(GPIO_NUM_4);
+    isolate(GPIO_NUM_7);
+    isolate(GPIO_NUM_8);
+    isolate(GPIO_NUM_9);
+    isolate(GPIO_NUM_41);
+    isolate(GPIO_NUM_42);
+
+    esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_AUTO);
+    esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_SLOW_MEM, ESP_PD_OPTION_OFF);
+    esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_FAST_MEM, ESP_PD_OPTION_OFF);
+    esp_sleep_pd_config(ESP_PD_DOMAIN_XTAL, ESP_PD_OPTION_OFF);
+    esp_sleep_pd_config(ESP_PD_DOMAIN_RTC8M, ESP_PD_OPTION_OFF);
+    esp_sleep_pd_config(ESP_PD_DOMAIN_VDDSDIO, ESP_PD_OPTION_OFF);
+}
+
 static void prepare_for_sleep() {
     power_off_camera();
     vTaskDelay(pdMS_TO_TICKS(20));
@@ -1089,21 +1107,7 @@ void deep_sleep(String id) {
     esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);
     esp_sleep_enable_ext1_wakeup(1ULL << RCWL_DO_GPIO, ESP_EXT1_WAKEUP_ANY_HIGH);
 
-    isolate(GPIO_NUM_1);
-    isolate(GPIO_NUM_3);
-    isolate(GPIO_NUM_4);
-    isolate(GPIO_NUM_7);
-    isolate(GPIO_NUM_8);
-    isolate(GPIO_NUM_9);
-    isolate(GPIO_NUM_41);
-    isolate(GPIO_NUM_42);
-
-    esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_AUTO);
-    esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_SLOW_MEM, ESP_PD_OPTION_OFF);
-    esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_FAST_MEM, ESP_PD_OPTION_OFF);
-    esp_sleep_pd_config(ESP_PD_DOMAIN_XTAL, ESP_PD_OPTION_OFF);
-    esp_sleep_pd_config(ESP_PD_DOMAIN_RTC8M, ESP_PD_OPTION_OFF);
-    esp_sleep_pd_config(ESP_PD_DOMAIN_VDDSDIO, ESP_PD_OPTION_OFF);
+    configure_sleep_low_power();
 
     esp_deep_sleep_start();
 }
@@ -1115,7 +1119,9 @@ void deep_sleep_timer(uint64_t seconds) {
     telegram_runtime::send(String("deep_sleep_timer: ") + String((unsigned long long)seconds));
 
     prepare_for_sleep();
+    esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);
     esp_sleep_enable_timer_wakeup(seconds * uS_PER_SEC);
+    configure_sleep_low_power();
     esp_deep_sleep_start();
 }
 
