@@ -48,6 +48,12 @@ Fork-specific runtime features:
   - timer-based sleep (`/sleep?sec=N`)
   - deep sleep path (`/sleep?deep=1`)
 
+## Web viewer
+
+This firmware has a dedicated Next.js viewer app in a separate public repository:
+
+- https://github.com/Joel2B/esp32cam-rtsp-viewer-public
+
 ## Runtime module layout
 
 `main.cpp` remains the orchestrator, while reusable pieces are split into:
