@@ -1938,7 +1938,7 @@ void handle_frame_dark() {
 
 void setup() {
     WiFi.mode(WIFI_STA);
-    esp_wifi_set_max_tx_power(52);
+    esp_wifi_set_max_tx_power(WIFI_MAX_TX_POWER);
 
     // Deferred init: stream sync primitives and sensor runtime are created post-WiFi.
     g_stream_sync_ready = false;

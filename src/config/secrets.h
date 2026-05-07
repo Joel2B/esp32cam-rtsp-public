@@ -1,7 +1,7 @@
 #if __has_include("secrets.local.h")
 #include "secrets.local.h"
 #else
-#error "Missing src/config/secrets.local.h. Create it with WIFI_SSID, WIFI_PASSWORD, AP_ADMIN_PASSWORD, OTA_PASSWORD, TELEGRAM_MESSAGE_BOT_TOKEN, TELEGRAM_MESSAGE_CHAT_ID (and optional OTA_PORT, TELEGRAM_PHOTO_BOT_TOKEN, TELEGRAM_PHOTO_CHAT_ID)."
+#error "Missing src/config/secrets.local.h. Create it with WIFI_SSID, WIFI_PASSWORD, AP_ADMIN_PASSWORD, OTA_PASSWORD, TELEGRAM_MESSAGE_BOT_TOKEN, TELEGRAM_MESSAGE_CHAT_ID (and optional OTA_PORT, WIFI_MAX_TX_POWER, TELEGRAM_PHOTO_BOT_TOKEN, TELEGRAM_PHOTO_CHAT_ID)."
 #endif
 
 #ifndef WIFI_SSID
@@ -38,4 +38,8 @@
 
 #ifndef OTA_PORT
 #define OTA_PORT 3232
+#endif
+
+#ifndef WIFI_MAX_TX_POWER
+#define WIFI_MAX_TX_POWER 44
 #endif
